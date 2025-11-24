@@ -9,6 +9,7 @@ const Index = () => {
   const [words, setWords] = useState<Word[]>([]);
   const [currentWordIndex, setCurrentWordIndex] = useState(0);
   const [score, setScore] = useState(0);
+  const [isHardMode, setIsHardMode] = useState(false);
 
   useEffect(() => {
     const parsedWords = parseCSV(wordsCSV);
@@ -109,9 +110,12 @@ const Index = () => {
       <div className="container max-w-2xl mx-auto h-screen">
         <GameBoard 
           currentWord={words[currentWordIndex].english}
+          currentWordTurkish={words[currentWordIndex].turkish}
           onWordComplete={handleWordComplete}
           onGameOver={handleGameOver}
           score={score}
+          isHardMode={isHardMode}
+          onToggleHardMode={() => setIsHardMode(!isHardMode)}
         />
       </div>
     </div>
