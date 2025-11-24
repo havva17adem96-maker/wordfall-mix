@@ -6,19 +6,22 @@ import { useToast } from "@/hooks/use-toast";
 
 interface GameBoardProps {
   currentWord: string;
+  currentWordTurkish: string;
   onWordComplete: () => void;
   onGameOver: () => void;
   score: number;
+  isHardMode: boolean;
+  onToggleHardMode: () => void;
 }
 
 const GRID_HEIGHT = 10;
 const BASE_FALL_DURATION = 15000; // 15 seconds base
 
-export const GameBoard = ({ currentWord, onWordComplete, onGameOver, score }: GameBoardProps) => {
+export const GameBoard = ({ currentWord, currentWordTurkish, onWordComplete, onGameOver, score, isHardMode, onToggleHardMode }: GameBoardProps) => {
   const [answerBlocks, setAnswerBlocks] = useState<string[]>([]);
   const [scrambledLetters, setScrambledLetters] = useState<string[]>([]);
   const [fallingPosition, setFallingPosition] = useState(0);
-  const [stackedWords, setStackedWords] = useState<number[]>([]);
+  const [stackedWords, setStackedWords] = useState<{word: string, position: number}[]>([]);
   const [isAnimating, setIsAnimating] = useState(false);
   const { toast } = useToast();
 
@@ -43,11 +46,14 @@ export const GameBoard = ({ currentWord, onWordComplete, onGameOver, score }: Ga
         if (next >= maxPosition) {
           // Word reached bottom without completion
           setIsAnimating(false);
-          setStackedWords(prev => [...prev, next]);
+          setStackedWords(prev => [...prev, { word: currentWord, position: next }]);
           
           if (stackedWords.length + 1 >= GRID_HEIGHT - 1) {
             // Game over
             setTimeout(() => onGameOver(), 500);
+          } else {
+            // Move to next word immediately
+            setTimeout(() => onWordComplete(), 300);
           }
           
           return next;
@@ -120,12 +126,22 @@ export const GameBoard = ({ currentWord, onWordComplete, onGameOver, score }: Ga
 
   return (
     <div className="flex flex-col h-full justify-between p-4 gap-4">
-      {/* Score */}
-      <div className="text-center">
-        <div className="text-primary text-4xl font-bold animate-glow">
-          {score}
+      {/* Score and Hard Mode */}
+      <div className="flex justify-center items-center gap-6">
+        <div className="text-center">
+          <div className="text-primary text-4xl font-bold animate-glow">
+            {score}
+          </div>
+          <div className="text-muted-foreground text-sm">SCORE</div>
         </div>
-        <div className="text-muted-foreground text-sm">SCORE</div>
+        <Button
+          onClick={onToggleHardMode}
+          variant={isHardMode ? "default" : "outline"}
+          size="sm"
+          className="font-bold"
+        >
+          {isHardMode ? "ZOR MOD ✓" : "ZOR MOD"}
+        </Button>
       </div>
 
       {/* Game Grid */}
@@ -133,14 +149,14 @@ export const GameBoard = ({ currentWord, onWordComplete, onGameOver, score }: Ga
         <div className="relative h-[500px] border-2 border-game-border rounded-2xl bg-game-block/20 overflow-hidden">
           {/* Falling word */}
           <div 
-            className="absolute left-0 right-0 flex justify-center gap-2 px-4 transition-transform"
+            className="absolute left-0 right-0 flex justify-center gap-1 px-4 transition-transform"
             style={{ 
               transform: `translateY(${fallingPosition * 50}px)`,
               transitionDuration: `${fallDuration / maxPosition}ms`,
               transitionTimingFunction: 'linear'
             }}
           >
-            {currentWord.split("").map((letter, i) => (
+            {(isHardMode ? currentWordTurkish : currentWord).split("").map((letter, i) => (
               <LetterBlock key={i} letter={letter} variant="falling" />
             ))}
           </div>
@@ -154,21 +170,27 @@ export const GameBoard = ({ currentWord, onWordComplete, onGameOver, score }: Ga
             />
           ))}
           
-          {/* Stacked words indicator */}
-          {stackedWords.map((pos, i) => (
+          {/* Stacked words */}
+          {stackedWords.map((item, i) => (
             <div
               key={i}
-              className="absolute left-0 right-0 h-[50px] bg-destructive/20 border-y border-destructive/50"
+              className="absolute left-0 right-0 h-[50px] bg-destructive/20 border-y border-destructive/50 flex justify-center items-center gap-1"
               style={{ bottom: `${(stackedWords.length - i - 1) * 50}px` }}
-            />
+            >
+              {item.word.split("").map((letter, idx) => (
+                <LetterBlock key={idx} letter={letter} variant="falling" size="small" />
+              ))}
+            </div>
           ))}
         </div>
       </div>
 
       {/* Answer area */}
       <div className="space-y-2">
-        <div className="text-center text-sm text-muted-foreground">BUILD THE WORD</div>
-        <div className="flex justify-center gap-2 px-4">
+        <div className="text-center text-sm text-muted-foreground">
+          {isHardMode ? "KELİMEYİ YAZ" : "BUILD THE WORD"}
+        </div>
+        <div className="flex justify-center gap-1 px-4 flex-wrap">
           {answerBlocks.map((letter, i) => (
             <LetterBlock 
               key={i} 
@@ -183,8 +205,10 @@ export const GameBoard = ({ currentWord, onWordComplete, onGameOver, score }: Ga
 
       {/* Scrambled letters */}
       <div className="space-y-2">
-        <div className="text-center text-sm text-muted-foreground">TAP LETTERS</div>
-        <div className="grid grid-cols-5 gap-2 px-4">
+        <div className="text-center text-sm text-muted-foreground">
+          {isHardMode ? "HARFLERİ SEÇ" : "TAP LETTERS"}
+        </div>
+        <div className="grid grid-cols-6 gap-1 px-4 max-w-md mx-auto">
           {scrambledLetters.map((letter, i) => (
             <LetterBlock 
               key={i} 
