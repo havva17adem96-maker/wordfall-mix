@@ -1,37 +1,37 @@
 import { useState, useEffect } from "react";
 import { GameBoard } from "@/components/GameBoard";
 import { Button } from "@/components/ui/button";
-import { parseCSV, shuffleArray, type Word } from "@/utils/wordParser";
-import wordsCSV from "@/data/words.csv?raw";
+import { useLearnedWords, shuffleArray, type LearnedWord } from "@/hooks/useLearnedWords";
 
 const Index = () => {
   const [gameState, setGameState] = useState<"menu" | "playing" | "gameover">("menu");
-  const [words, setWords] = useState<Word[]>([]);
+  const [gameWords, setGameWords] = useState<LearnedWord[]>([]);
   const [currentWordIndex, setCurrentWordIndex] = useState(0);
   const [score, setScore] = useState(0);
   const [isHardMode, setIsHardMode] = useState(false);
+  
+  const { words, loading, error } = useLearnedWords();
 
+  // Clear localStorage on mount
   useEffect(() => {
-    const parsedWords = parseCSV(wordsCSV);
-    setWords(shuffleArray(parsedWords));
+    localStorage.clear();
   }, []);
 
   const startGame = () => {
+    if (words.length === 0) return;
     setGameState("playing");
     setScore(0);
     setCurrentWordIndex(0);
-    const parsedWords = parseCSV(wordsCSV);
-    setWords(shuffleArray(parsedWords));
+    setGameWords(shuffleArray(words));
   };
 
   const handleWordComplete = () => {
-    const currentWord = words[currentWordIndex];
+    const currentWord = gameWords[currentWordIndex];
     setScore(prev => prev + currentWord.english.length * 10);
     
-    if (currentWordIndex < words.length - 1) {
+    if (currentWordIndex < gameWords.length - 1) {
       setCurrentWordIndex(prev => prev + 1);
     } else {
-      // Won the game!
       setGameState("gameover");
     }
   };
@@ -39,6 +39,36 @@ const Index = () => {
   const handleGameOver = () => {
     setGameState("gameover");
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-background to-background/80 flex items-center justify-center">
+        <div className="text-2xl text-muted-foreground animate-pulse">Kelimeler yükleniyor...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-background to-background/80 flex items-center justify-center p-8">
+        <div className="text-center space-y-4">
+          <div className="text-2xl text-destructive">Hata: {error}</div>
+          <p className="text-muted-foreground">Supabase bağlantısını kontrol edin.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (words.length === 0) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-background to-background/80 flex items-center justify-center p-8">
+        <div className="text-center space-y-4">
+          <div className="text-2xl text-muted-foreground">Henüz öğrenilmiş kelime yok</div>
+          <p className="text-muted-foreground">Diğer projede kelime ekleyin.</p>
+        </div>
+      </div>
+    );
+  }
 
   if (gameState === "menu") {
     return (
@@ -49,6 +79,9 @@ const Index = () => {
           </h1>
           <p className="text-xl text-muted-foreground max-w-md">
             Catch falling words and build them before they hit the bottom!
+          </p>
+          <p className="text-sm text-muted-foreground">
+            {words.length} kelime yüklendi
           </p>
         </div>
         
@@ -97,7 +130,7 @@ const Index = () => {
     );
   }
 
-  if (words.length === 0 || !words[currentWordIndex]) {
+  if (gameWords.length === 0 || !gameWords[currentWordIndex]) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-background to-background/80 flex items-center justify-center">
         <div className="text-2xl text-muted-foreground animate-pulse">Loading...</div>
@@ -109,8 +142,8 @@ const Index = () => {
     <div className="min-h-screen bg-gradient-to-b from-background to-background/80">
       <div className="container max-w-2xl mx-auto h-screen">
         <GameBoard 
-          currentWord={words[currentWordIndex].english}
-          currentWordTurkish={words[currentWordIndex].turkish}
+          currentWord={gameWords[currentWordIndex].english.toLowerCase()}
+          currentWordTurkish={gameWords[currentWordIndex].turkish}
           onWordComplete={handleWordComplete}
           onGameOver={handleGameOver}
           score={score}
