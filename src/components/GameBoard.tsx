@@ -17,8 +17,9 @@ interface GameBoardProps {
 }
 
 const GRID_HEIGHT = 10;
-const BASE_FALL_DURATION = 8000; // 8 seconds base
-const TIME_PER_LETTER = 800; // Extra time per letter
+const MAX_WRONG_WORDS = 9; // Game over when 9 words are wrong
+const TIME_PER_LETTER_NORMAL = 2000; // 2 seconds per letter in normal mode
+const TIME_PER_LETTER_HARD = 4000; // 4 seconds per letter in hard mode
 
 export const GameBoard = ({ currentWord, currentWordTurkish, onWordCorrect, onWordWrong, onGameOver, score, combo, isHardMode, onToggleHardMode }: GameBoardProps) => {
   const [answerBlocks, setAnswerBlocks] = useState<string[]>([]);
@@ -29,8 +30,8 @@ export const GameBoard = ({ currentWord, currentWordTurkish, onWordCorrect, onWo
   const { toast } = useToast();
 
   const maxPosition = GRID_HEIGHT - stackedWords.length;
-  // Longer words get more time to type
-  const fallDuration = BASE_FALL_DURATION + (currentWord.length * TIME_PER_LETTER);
+  // Fall duration: letter count * time per letter (mode dependent)
+  const fallDuration = currentWord.length * (isHardMode ? TIME_PER_LETTER_HARD : TIME_PER_LETTER_NORMAL);
 
   useEffect(() => {
     // Initialize game state for new word
@@ -50,10 +51,11 @@ export const GameBoard = ({ currentWord, currentWordTurkish, onWordCorrect, onWo
         if (next >= maxPosition) {
           // Word reached bottom without completion = WRONG
           setIsAnimating(false);
+          const newStackedCount = stackedWords.length + 1;
           setStackedWords(prev => [...prev, { word: currentWord, position: next }]);
           
-          if (stackedWords.length + 1 >= GRID_HEIGHT - 1) {
-            // Game over
+          if (newStackedCount >= MAX_WRONG_WORDS) {
+            // Game over only when 9 words are stacked (no room for 10th)
             setTimeout(() => onGameOver(), 500);
           } else {
             // Wrong word: 0 XP, combo reset, move to next word
