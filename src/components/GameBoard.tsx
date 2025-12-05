@@ -17,7 +17,8 @@ interface GameBoardProps {
 }
 
 const GRID_HEIGHT = 10;
-const BASE_FALL_DURATION = 15000; // 15 seconds base
+const BASE_FALL_DURATION = 8000; // 8 seconds base
+const TIME_PER_LETTER = 800; // Extra time per letter
 
 export const GameBoard = ({ currentWord, currentWordTurkish, onWordComplete, onWordFailed, onGameOver, score, combo, isHardMode, onToggleHardMode }: GameBoardProps) => {
   const [answerBlocks, setAnswerBlocks] = useState<string[]>([]);
@@ -28,7 +29,8 @@ export const GameBoard = ({ currentWord, currentWordTurkish, onWordComplete, onW
   const { toast } = useToast();
 
   const maxPosition = GRID_HEIGHT - stackedWords.length;
-  const fallDuration = BASE_FALL_DURATION - (currentWord.length * 500);
+  // Longer words get more time to type
+  const fallDuration = BASE_FALL_DURATION + (currentWord.length * TIME_PER_LETTER);
 
   useEffect(() => {
     // Initialize game state for new word
@@ -91,7 +93,7 @@ export const GameBoard = ({ currentWord, currentWordTurkish, onWordComplete, onW
           const earnedXP = Math.floor(baseXP * (1 + bonusPercent / 100));
           toast({
             title: "Correct! ✓",
-            description: `+${earnedXP} XP ${combo > 1 ? `(x${combo} Combo!)` : ''}`,
+            description: `+${earnedXP} XP (x${combo})`,
             duration: 1500,
           });
           setTimeout(() => onWordComplete(), 300);
@@ -146,7 +148,7 @@ export const GameBoard = ({ currentWord, currentWordTurkish, onWordComplete, onW
             x{combo}
           </div>
           <div className="text-muted-foreground text-xs">
-            {combo > 1 ? `+${Math.min((combo - 1) * 5, 50)}%` : 'COMBO'}
+            +{Math.min((combo - 1) * 5, 50)}%
           </div>
         </div>
         <Button
