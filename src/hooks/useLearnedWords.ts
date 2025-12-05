@@ -46,7 +46,7 @@ export function useLearnedWords() {
       // If user_id exists, fetch their ratings from user_word_ratings
       if (userId) {
         const { data: ratingsData, error: ratingsError } = await supabase
-          .from('user_word_ratings')
+          .from('user_word_progress')
           .select('word_id, star_rating')
           .eq('user_id', userId);
 
@@ -90,11 +90,11 @@ export function useLearnedWords() {
     console.log('Attempting to save star rating:', { userId, wordId, clampedRating });
 
     try {
-      // Upsert into user_word_ratings
+      // Upsert into user_word_progress
       const { data, error } = await supabase
-        .from('user_word_ratings')
+        .from('user_word_progress')
         .upsert(
-          { user_id: userId, word_id: wordId, star_rating: clampedRating },
+          { user_id: userId, word_id: wordId, star_rating: clampedRating, updated_at: new Date().toISOString() },
           { onConflict: 'user_id,word_id' }
         )
         .select();
