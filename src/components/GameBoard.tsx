@@ -7,8 +7,8 @@ import { useToast } from "@/hooks/use-toast";
 interface GameBoardProps {
   currentWord: string;
   currentWordTurkish: string;
-  onWordComplete: () => void;
-  onWordFailed: () => void;
+  onWordCorrect: () => void;
+  onWordWrong: () => void;
   onGameOver: () => void;
   score: number;
   combo: number;
@@ -20,7 +20,7 @@ const GRID_HEIGHT = 10;
 const BASE_FALL_DURATION = 8000; // 8 seconds base
 const TIME_PER_LETTER = 800; // Extra time per letter
 
-export const GameBoard = ({ currentWord, currentWordTurkish, onWordComplete, onWordFailed, onGameOver, score, combo, isHardMode, onToggleHardMode }: GameBoardProps) => {
+export const GameBoard = ({ currentWord, currentWordTurkish, onWordCorrect, onWordWrong, onGameOver, score, combo, isHardMode, onToggleHardMode }: GameBoardProps) => {
   const [answerBlocks, setAnswerBlocks] = useState<string[]>([]);
   const [scrambledLetters, setScrambledLetters] = useState<string[]>([]);
   const [fallingPosition, setFallingPosition] = useState(0);
@@ -48,17 +48,16 @@ export const GameBoard = ({ currentWord, currentWordTurkish, onWordComplete, onW
         const next = prev + 1;
         
         if (next >= maxPosition) {
-          // Word reached bottom without completion
+          // Word reached bottom without completion = WRONG
           setIsAnimating(false);
           setStackedWords(prev => [...prev, { word: currentWord, position: next }]);
-          onWordFailed(); // Reset combo
           
           if (stackedWords.length + 1 >= GRID_HEIGHT - 1) {
             // Game over
             setTimeout(() => onGameOver(), 500);
           } else {
-            // Move to next word immediately
-            setTimeout(() => onWordComplete(), 300);
+            // Wrong word: 0 XP, combo reset, move to next word
+            setTimeout(() => onWordWrong(), 300);
           }
           
           return next;
@@ -69,7 +68,7 @@ export const GameBoard = ({ currentWord, currentWordTurkish, onWordComplete, onW
     }, fallDuration / maxPosition);
 
     return () => clearInterval(interval);
-  }, [isAnimating, maxPosition, fallDuration, stackedWords.length, onGameOver]);
+  }, [isAnimating, maxPosition, fallDuration, stackedWords.length, onGameOver, onWordWrong, currentWord]);
 
   const handleScrambledLetterClick = useCallback((letter: string, index: number) => {
     const firstEmptyIndex = answerBlocks.findIndex(block => block === "");
@@ -87,19 +86,19 @@ export const GameBoard = ({ currentWord, currentWordTurkish, onWordComplete, onW
       if (newAnswer.every(block => block !== "")) {
         const formedWord = newAnswer.join("");
         if (formedWord === currentWord) {
+          // Correct word = TRUE
           setIsAnimating(false);
-          const baseXP = isHardMode ? 200 : 100;
-          const bonusPercent = Math.min((combo - 1) * 5, 50);
-          const earnedXP = Math.floor(baseXP * (1 + bonusPercent / 100));
+          const earnedXP = isHardMode 
+            ? 200 + Math.min((combo - 1) * 10, 100)
+            : 100 + Math.min((combo - 1) * 5, 50);
           toast({
             title: "Correct! ✓",
             description: `+${earnedXP} XP (x${combo})`,
             duration: 1500,
           });
-          setTimeout(() => onWordComplete(), 300);
+          setTimeout(() => onWordCorrect(), 300);
         } else {
-          // Wrong word - shake animation
-          onWordFailed(); // Reset combo on wrong guess
+          // Wrong arrangement - just retry, don't reset combo
           toast({
             title: "Try again!",
             variant: "destructive",
@@ -112,7 +111,7 @@ export const GameBoard = ({ currentWord, currentWordTurkish, onWordComplete, onW
         }
       }
     }
-  }, [answerBlocks, scrambledLetters, currentWord, onWordComplete, toast]);
+  }, [answerBlocks, scrambledLetters, currentWord, onWordCorrect, toast, isHardMode, combo]);
 
   const handleAnswerBlockClick = useCallback((index: number) => {
     if (answerBlocks[index] !== "") {
@@ -148,7 +147,7 @@ export const GameBoard = ({ currentWord, currentWordTurkish, onWordComplete, onW
             x{combo}
           </div>
           <div className="text-muted-foreground text-xs">
-            +{Math.min((combo - 1) * 5, 50)}%
+            +{isHardMode ? Math.min((combo - 1) * 10, 100) : Math.min((combo - 1) * 5, 50)}
           </div>
         </div>
         <Button
