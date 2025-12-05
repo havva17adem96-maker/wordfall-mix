@@ -15,32 +15,14 @@ export function useLearnedWords() {
   const [selectedPackage, setSelectedPackage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [userId, setUserId] = useState<string | null>(null);
-
-  // Get user_id from URL on mount
-  useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const uid = urlParams.get('user_id');
-    console.log('URL user_id:', uid);
-    console.log('Full URL:', window.location.href);
-    setUserId(uid);
-  }, []);
 
   const fetchWords = async () => {
     try {
       setLoading(true);
-      console.log('Fetching words with userId:', userId);
       
-      let query = supabase
+      const { data, error } = await supabase
         .from('learned_words')
         .select('id, english, turkish, package_name, star_rating');
-
-      // Filter by user_id if available
-      if (userId) {
-        query = query.eq('user_id', userId);
-      }
-
-      const { data, error } = await query;
 
       console.log('Supabase response:', { data, error });
 
@@ -96,10 +78,8 @@ export function useLearnedWords() {
     : words;
 
   useEffect(() => {
-    if (userId !== null || !window.location.search.includes('user_id')) {
-      fetchWords();
-    }
-  }, [userId]);
+    fetchWords();
+  }, []);
 
   // Real-time subscription
   useEffect(() => {
@@ -121,7 +101,7 @@ export function useLearnedWords() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [userId]);
+  }, []);
 
   return { 
     words: filteredWords, 
@@ -131,7 +111,6 @@ export function useLearnedWords() {
     setSelectedPackage,
     loading, 
     error, 
-    userId, 
     refetch: fetchWords,
     incrementStar,
     resetStarToOne
