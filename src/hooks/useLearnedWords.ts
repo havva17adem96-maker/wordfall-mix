@@ -6,6 +6,7 @@ export interface LearnedWord {
   english: string;
   turkish: string;
   package_name?: string;
+  star_rating?: number;
 }
 
 export function useLearnedWords() {
@@ -20,14 +21,19 @@ export function useLearnedWords() {
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const uid = urlParams.get('user_id');
+    console.log('URL user_id:', uid);
+    console.log('Full URL:', window.location.href);
     setUserId(uid);
   }, []);
 
   const fetchWords = async () => {
     try {
+      setLoading(true);
+      console.log('Fetching words with userId:', userId);
+      
       let query = supabase
         .from('learned_words')
-        .select('id, english, turkish, package_name');
+        .select('id, english, turkish, package_name, star_rating');
 
       // Filter by user_id if available
       if (userId) {
@@ -35,6 +41,8 @@ export function useLearnedWords() {
       }
 
       const { data, error } = await query;
+
+      console.log('Supabase response:', { data, error });
 
       if (error) throw error;
 
@@ -44,11 +52,42 @@ export function useLearnedWords() {
       // Extract unique package names
       const uniquePackages = [...new Set(allWords.map(w => w.package_name).filter(Boolean))] as string[];
       setPackages(uniquePackages);
+      setError(null);
     } catch (err) {
+      console.error('Fetch error:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch words');
     } finally {
       setLoading(false);
     }
+  };
+
+  // Update star rating for a word
+  const updateStarRating = async (wordId: string, newRating: number) => {
+    try {
+      const { error } = await supabase
+        .from('learned_words')
+        .update({ star_rating: Math.min(Math.max(newRating, 0), 5) })
+        .eq('id', wordId);
+
+      if (error) throw error;
+      
+      // Update local state
+      setWords(prev => prev.map(w => 
+        w.id === wordId ? { ...w, star_rating: Math.min(Math.max(newRating, 0), 5) } : w
+      ));
+    } catch (err) {
+      console.error('Failed to update star rating:', err);
+    }
+  };
+
+  // Increment star (correct answer)
+  const incrementStar = async (wordId: string, currentRating: number = 0) => {
+    await updateStarRating(wordId, Math.min(currentRating + 1, 5));
+  };
+
+  // Reset star to 1 (wrong answer)
+  const resetStarToOne = async (wordId: string) => {
+    await updateStarRating(wordId, 1);
   };
 
   // Get filtered words based on selected package
@@ -57,9 +96,13 @@ export function useLearnedWords() {
     : words;
 
   useEffect(() => {
-    fetchWords();
+    if (userId !== null || !window.location.search.includes('user_id')) {
+      fetchWords();
+    }
+  }, [userId]);
 
-    // Real-time subscription for changes
+  // Real-time subscription
+  useEffect(() => {
     const channel = supabase
       .channel('learned_words_changes')
       .on(
@@ -89,7 +132,9 @@ export function useLearnedWords() {
     loading, 
     error, 
     userId, 
-    refetch: fetchWords 
+    refetch: fetchWords,
+    incrementStar,
+    resetStarToOne
   };
 }
 
