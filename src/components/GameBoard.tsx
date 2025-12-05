@@ -8,8 +8,10 @@ interface GameBoardProps {
   currentWord: string;
   currentWordTurkish: string;
   onWordComplete: () => void;
+  onWordFailed: () => void;
   onGameOver: () => void;
   score: number;
+  combo: number;
   isHardMode: boolean;
   onToggleHardMode: () => void;
 }
@@ -17,7 +19,7 @@ interface GameBoardProps {
 const GRID_HEIGHT = 10;
 const BASE_FALL_DURATION = 15000; // 15 seconds base
 
-export const GameBoard = ({ currentWord, currentWordTurkish, onWordComplete, onGameOver, score, isHardMode, onToggleHardMode }: GameBoardProps) => {
+export const GameBoard = ({ currentWord, currentWordTurkish, onWordComplete, onWordFailed, onGameOver, score, combo, isHardMode, onToggleHardMode }: GameBoardProps) => {
   const [answerBlocks, setAnswerBlocks] = useState<string[]>([]);
   const [scrambledLetters, setScrambledLetters] = useState<string[]>([]);
   const [fallingPosition, setFallingPosition] = useState(0);
@@ -47,6 +49,7 @@ export const GameBoard = ({ currentWord, currentWordTurkish, onWordComplete, onG
           // Word reached bottom without completion
           setIsAnimating(false);
           setStackedWords(prev => [...prev, { word: currentWord, position: next }]);
+          onWordFailed(); // Reset combo
           
           if (stackedWords.length + 1 >= GRID_HEIGHT - 1) {
             // Game over
@@ -83,14 +86,18 @@ export const GameBoard = ({ currentWord, currentWordTurkish, onWordComplete, onG
         const formedWord = newAnswer.join("");
         if (formedWord === currentWord) {
           setIsAnimating(false);
+          const baseXP = isHardMode ? 200 : 100;
+          const bonusPercent = Math.min((combo - 1) * 5, 50);
+          const earnedXP = Math.floor(baseXP * (1 + bonusPercent / 100));
           toast({
             title: "Correct! ✓",
-            description: `+${currentWord.length * 10} points`,
+            description: `+${earnedXP} XP ${combo > 1 ? `(x${combo} Combo!)` : ''}`,
             duration: 1500,
           });
           setTimeout(() => onWordComplete(), 300);
         } else {
           // Wrong word - shake animation
+          onWordFailed(); // Reset combo on wrong guess
           toast({
             title: "Try again!",
             variant: "destructive",
@@ -126,13 +133,21 @@ export const GameBoard = ({ currentWord, currentWordTurkish, onWordComplete, onG
 
   return (
     <div className="flex flex-col h-full justify-between p-4 gap-4">
-      {/* Score and Hard Mode */}
-      <div className="flex justify-center items-center gap-6">
+      {/* Score, Combo and Hard Mode */}
+      <div className="flex justify-center items-center gap-4">
         <div className="text-center">
-          <div className="text-primary text-4xl font-bold animate-glow">
+          <div className="text-primary text-3xl font-bold animate-glow">
             {score}
           </div>
-          <div className="text-muted-foreground text-sm">SCORE</div>
+          <div className="text-muted-foreground text-xs">XP</div>
+        </div>
+        <div className="text-center">
+          <div className={`text-2xl font-bold ${combo > 1 ? 'text-yellow-500 animate-pulse' : 'text-muted-foreground'}`}>
+            x{combo}
+          </div>
+          <div className="text-muted-foreground text-xs">
+            {combo > 1 ? `+${Math.min((combo - 1) * 5, 50)}%` : 'COMBO'}
+          </div>
         </div>
         <Button
           onClick={onToggleHardMode}
@@ -140,7 +155,7 @@ export const GameBoard = ({ currentWord, currentWordTurkish, onWordComplete, onG
           size="sm"
           className="font-bold"
         >
-          {isHardMode ? "ZOR MOD ✓" : "ZOR MOD"}
+          {isHardMode ? "ZOR ✓" : "ZOR"}
         </Button>
       </div>
 
