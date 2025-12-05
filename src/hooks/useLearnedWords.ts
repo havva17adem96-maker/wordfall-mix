@@ -5,10 +5,13 @@ export interface LearnedWord {
   id: string;
   english: string;
   turkish: string;
+  package_name?: string;
 }
 
 export function useLearnedWords() {
   const [words, setWords] = useState<LearnedWord[]>([]);
+  const [packages, setPackages] = useState<string[]>([]);
+  const [selectedPackage, setSelectedPackage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
@@ -24,7 +27,7 @@ export function useLearnedWords() {
     try {
       let query = supabase
         .from('learned_words')
-        .select('id, english, turkish');
+        .select('id, english, turkish, package_name');
 
       // Filter by user_id if available
       if (userId) {
@@ -35,13 +38,23 @@ export function useLearnedWords() {
 
       if (error) throw error;
 
-      setWords(data || []);
+      const allWords = data || [];
+      setWords(allWords);
+
+      // Extract unique package names
+      const uniquePackages = [...new Set(allWords.map(w => w.package_name).filter(Boolean))] as string[];
+      setPackages(uniquePackages);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch words');
     } finally {
       setLoading(false);
     }
   };
+
+  // Get filtered words based on selected package
+  const filteredWords = selectedPackage 
+    ? words.filter(w => w.package_name === selectedPackage)
+    : words;
 
   useEffect(() => {
     fetchWords();
@@ -67,7 +80,17 @@ export function useLearnedWords() {
     };
   }, [userId]);
 
-  return { words, loading, error, userId, refetch: fetchWords };
+  return { 
+    words: filteredWords, 
+    allWords: words,
+    packages, 
+    selectedPackage, 
+    setSelectedPackage,
+    loading, 
+    error, 
+    userId, 
+    refetch: fetchWords 
+  };
 }
 
 export function shuffleArray<T>(array: T[]): T[] {
