@@ -28,29 +28,34 @@ const Index = () => {
     setGameWords(shuffleArray(words));
   };
 
-  const calculateComboMultiplier = (currentCombo: number) => {
-    // Max 50% bonus at 10+ combo
-    const bonusPercent = Math.min((currentCombo - 1) * 5, 50);
-    return 1 + bonusPercent / 100;
+  const calculateXP = (currentCombo: number) => {
+    // Normal: 100 + (combo-1)*5, max 150
+    // Hard: 200 + (combo-1)*10, max 300
+    if (isHardMode) {
+      return 200 + Math.min((currentCombo - 1) * 10, 100);
+    }
+    return 100 + Math.min((currentCombo - 1) * 5, 50);
   };
 
-  const handleWordComplete = () => {
-    const baseXP = isHardMode ? 200 : 100;
-    const multiplier = calculateComboMultiplier(combo);
-    const earnedXP = Math.floor(baseXP * multiplier);
-    
+  const handleWordCorrect = () => {
+    const earnedXP = calculateXP(combo);
     setScore(prev => prev + earnedXP);
     setCombo(prev => prev + 1);
-    
+    moveToNextWord();
+  };
+
+  const handleWordWrong = () => {
+    // 0 XP for wrong words, reset combo
+    setCombo(1);
+    moveToNextWord();
+  };
+
+  const moveToNextWord = () => {
     if (currentWordIndex < gameWords.length - 1) {
       setCurrentWordIndex(prev => prev + 1);
     } else {
       setGameState("gameover");
     }
-  };
-
-  const handleWordFailed = () => {
-    setCombo(1); // Reset combo on failure
   };
 
   const handleGameOver = () => {
@@ -180,8 +185,8 @@ const Index = () => {
         <GameBoard 
           currentWord={gameWords[currentWordIndex].english.toLowerCase()}
           currentWordTurkish={gameWords[currentWordIndex].turkish}
-          onWordComplete={handleWordComplete}
-          onWordFailed={handleWordFailed}
+          onWordCorrect={handleWordCorrect}
+          onWordWrong={handleWordWrong}
           onGameOver={handleGameOver}
           score={score}
           combo={combo}
