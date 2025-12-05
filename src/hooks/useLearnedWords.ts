@@ -79,21 +79,27 @@ export function useLearnedWords() {
 
   // Update star rating for a word (user-specific)
   const updateStarRating = async (wordId: string, newRating: number) => {
+    console.log('updateStarRating called:', { wordId, newRating, userId });
+    
     if (!userId) {
       console.warn('No user_id, cannot save star rating');
       return;
     }
 
     const clampedRating = Math.min(Math.max(newRating, 0), 5);
+    console.log('Attempting to save star rating:', { userId, wordId, clampedRating });
 
     try {
       // Upsert into user_word_ratings
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('user_word_ratings')
         .upsert(
           { user_id: userId, word_id: wordId, star_rating: clampedRating },
           { onConflict: 'user_id,word_id' }
-        );
+        )
+        .select();
+
+      console.log('Supabase upsert response:', { data, error });
 
       if (error) throw error;
       
@@ -101,6 +107,7 @@ export function useLearnedWords() {
       setWords(prev => prev.map(w => 
         w.id === wordId ? { ...w, star_rating: clampedRating } : w
       ));
+      console.log('Star rating updated successfully');
     } catch (err) {
       console.error('Failed to update star rating:', err);
     }
