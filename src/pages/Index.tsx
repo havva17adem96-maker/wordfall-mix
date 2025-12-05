@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { GameBoard } from "@/components/GameBoard";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useLearnedWords, shuffleArray, type LearnedWord } from "@/hooks/useLearnedWords";
 
 const Index = () => {
@@ -10,7 +11,7 @@ const Index = () => {
   const [score, setScore] = useState(0);
   const [isHardMode, setIsHardMode] = useState(false);
   
-  const { words, loading, error } = useLearnedWords();
+  const { words, packages, selectedPackage, setSelectedPackage, loading, error } = useLearnedWords();
 
   // Clear localStorage on mount
   useEffect(() => {
@@ -85,10 +86,29 @@ const Index = () => {
           </p>
         </div>
         
-        <div className="flex flex-col gap-4 items-center">
+        <div className="flex flex-col gap-4 items-center w-full max-w-xs">
+          {/* Package Selector */}
+          <div className="w-full space-y-2">
+            <label className="text-sm text-muted-foreground">Paket Seç:</label>
+            <Select 
+              value={selectedPackage || "all"} 
+              onValueChange={(value) => setSelectedPackage(value === "all" ? null : value)}
+            >
+              <SelectTrigger className="w-full bg-background border-border">
+                <SelectValue placeholder="Tüm Kelimeler" />
+              </SelectTrigger>
+              <SelectContent className="bg-background border-border">
+                <SelectItem value="all">Tüm Kelimeler ({words.length})</SelectItem>
+                {packages.map((pkg) => (
+                  <SelectItem key={pkg} value={pkg}>{pkg}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
           <Button 
             onClick={startGame}
-            className="bg-primary hover:bg-primary/90 text-primary-foreground text-2xl px-12 py-8 rounded-2xl shadow-lg hover:shadow-[0_0_30px_hsl(var(--primary)/0.5)] transition-all animate-pop-in"
+            className="bg-primary hover:bg-primary/90 text-primary-foreground text-2xl px-12 py-8 rounded-2xl shadow-lg hover:shadow-[0_0_30px_hsl(var(--primary)/0.5)] transition-all animate-pop-in w-full"
           >
             START GAME
           </Button>
