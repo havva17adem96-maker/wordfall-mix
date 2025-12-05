@@ -9,26 +9,60 @@ export interface LearnedWord {
   star_rating?: number;
 }
 
+interface UserWordRating {
+  word_id: string;
+  star_rating: number;
+}
+
 export function useLearnedWords() {
   const [words, setWords] = useState<LearnedWord[]>([]);
   const [packages, setPackages] = useState<string[]>([]);
   const [selectedPackage, setSelectedPackage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
+
+  // Get user_id from URL on mount
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const uid = urlParams.get('user_id');
+    console.log('URL user_id:', uid);
+    setUserId(uid);
+  }, []);
 
   const fetchWords = async () => {
     try {
       setLoading(true);
       
-      const { data, error } = await supabase
+      // Fetch all words
+      const { data: wordsData, error: wordsError } = await supabase
         .from('learned_words')
-        .select('id, english, turkish, package_name, star_rating');
+        .select('id, english, turkish, package_name');
 
-      console.log('Supabase response:', { data, error });
+      if (wordsError) throw wordsError;
 
-      if (error) throw error;
+      let allWords = (wordsData || []).map(w => ({ ...w, star_rating: 0 }));
 
-      const allWords = data || [];
+      // If user_id exists, fetch their ratings from user_word_ratings
+      if (userId) {
+        const { data: ratingsData, error: ratingsError } = await supabase
+          .from('user_word_ratings')
+          .select('word_id, star_rating')
+          .eq('user_id', userId);
+
+        if (!ratingsError && ratingsData) {
+          const ratingsMap = new Map<string, number>(
+            ratingsData.map((r: UserWordRating) => [r.word_id, r.star_rating])
+          );
+          
+          // Merge ratings with words
+          allWords = allWords.map(w => ({
+            ...w,
+            star_rating: ratingsMap.get(w.id) || 0
+          }));
+        }
+      }
+
       setWords(allWords);
 
       // Extract unique package names
@@ -43,19 +77,29 @@ export function useLearnedWords() {
     }
   };
 
-  // Update star rating for a word
+  // Update star rating for a word (user-specific)
   const updateStarRating = async (wordId: string, newRating: number) => {
+    if (!userId) {
+      console.warn('No user_id, cannot save star rating');
+      return;
+    }
+
+    const clampedRating = Math.min(Math.max(newRating, 0), 5);
+
     try {
+      // Upsert into user_word_ratings
       const { error } = await supabase
-        .from('learned_words')
-        .update({ star_rating: Math.min(Math.max(newRating, 0), 5) })
-        .eq('id', wordId);
+        .from('user_word_ratings')
+        .upsert(
+          { user_id: userId, word_id: wordId, star_rating: clampedRating },
+          { onConflict: 'user_id,word_id' }
+        );
 
       if (error) throw error;
       
       // Update local state
       setWords(prev => prev.map(w => 
-        w.id === wordId ? { ...w, star_rating: Math.min(Math.max(newRating, 0), 5) } : w
+        w.id === wordId ? { ...w, star_rating: clampedRating } : w
       ));
     } catch (err) {
       console.error('Failed to update star rating:', err);
@@ -78,8 +122,10 @@ export function useLearnedWords() {
     : words;
 
   useEffect(() => {
-    fetchWords();
-  }, []);
+    if (userId !== null || !window.location.search.includes('user_id')) {
+      fetchWords();
+    }
+  }, [userId]);
 
   // Real-time subscription
   useEffect(() => {
@@ -101,7 +147,7 @@ export function useLearnedWords() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [userId]);
 
   return { 
     words: filteredWords, 
@@ -110,7 +156,8 @@ export function useLearnedWords() {
     selectedPackage, 
     setSelectedPackage,
     loading, 
-    error, 
+    error,
+    userId,
     refetch: fetchWords,
     incrementStar,
     resetStarToOne
