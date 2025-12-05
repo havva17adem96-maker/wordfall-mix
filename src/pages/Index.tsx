@@ -9,6 +9,7 @@ const Index = () => {
   const [gameWords, setGameWords] = useState<LearnedWord[]>([]);
   const [currentWordIndex, setCurrentWordIndex] = useState(0);
   const [score, setScore] = useState(0);
+  const [combo, setCombo] = useState(1);
   const [isHardMode, setIsHardMode] = useState(false);
   
   const { words, packages, selectedPackage, setSelectedPackage, loading, error } = useLearnedWords();
@@ -22,19 +23,34 @@ const Index = () => {
     if (words.length === 0) return;
     setGameState("playing");
     setScore(0);
+    setCombo(1);
     setCurrentWordIndex(0);
     setGameWords(shuffleArray(words));
   };
 
+  const calculateComboMultiplier = (currentCombo: number) => {
+    // Max 50% bonus at 10+ combo
+    const bonusPercent = Math.min((currentCombo - 1) * 5, 50);
+    return 1 + bonusPercent / 100;
+  };
+
   const handleWordComplete = () => {
-    const currentWord = gameWords[currentWordIndex];
-    setScore(prev => prev + currentWord.english.length * 10);
+    const baseXP = isHardMode ? 200 : 100;
+    const multiplier = calculateComboMultiplier(combo);
+    const earnedXP = Math.floor(baseXP * multiplier);
+    
+    setScore(prev => prev + earnedXP);
+    setCombo(prev => prev + 1);
     
     if (currentWordIndex < gameWords.length - 1) {
       setCurrentWordIndex(prev => prev + 1);
     } else {
       setGameState("gameover");
     }
+  };
+
+  const handleWordFailed = () => {
+    setCombo(1); // Reset combo on failure
   };
 
   const handleGameOver = () => {
@@ -165,8 +181,10 @@ const Index = () => {
           currentWord={gameWords[currentWordIndex].english.toLowerCase()}
           currentWordTurkish={gameWords[currentWordIndex].turkish}
           onWordComplete={handleWordComplete}
+          onWordFailed={handleWordFailed}
           onGameOver={handleGameOver}
           score={score}
+          combo={combo}
           isHardMode={isHardMode}
           onToggleHardMode={() => setIsHardMode(!isHardMode)}
         />
