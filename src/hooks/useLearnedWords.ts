@@ -14,6 +14,15 @@ interface UserWordRating {
   star_rating: number;
 }
 
+export interface GameState {
+  gameWords: LearnedWord[];
+  currentWordIndex: number;
+  score: number;
+  combo: number;
+  isHardMode: boolean;
+  stackedWords: string[];
+}
+
 export function useLearnedWords() {
   const [words, setWords] = useState<LearnedWord[]>([]);
   const [packages, setPackages] = useState<string[]>([]);
@@ -21,6 +30,8 @@ export function useLearnedWords() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
+  const [totalXP, setTotalXP] = useState(0);
+  const [savedGameState, setSavedGameState] = useState<GameState | null>(null);
 
   // Get user_id from URL on mount
   useEffect(() => {
@@ -29,6 +40,94 @@ export function useLearnedWords() {
     console.log('URL user_id:', uid);
     setUserId(uid);
   }, []);
+
+  // Fetch total XP from profiles table
+  const fetchTotalXP = async () => {
+    if (!userId) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('tetris_xp')
+        .eq('user_id', userId)
+        .maybeSingle();
+      
+      if (!error && data) {
+        setTotalXP(data.tetris_xp || 0);
+      }
+    } catch (err) {
+      console.error('Failed to fetch total XP:', err);
+    }
+  };
+
+  // Add XP to profiles table
+  const addTetrisXP = async (xpToAdd: number) => {
+    if (!userId || xpToAdd <= 0) return;
+    
+    try {
+      // Get current XP
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tetris_xp')
+        .eq('user_id', userId)
+        .maybeSingle();
+      
+      const currentXP = profile?.tetris_xp || 0;
+      const newTotalXP = currentXP + xpToAdd;
+      
+      // Upsert profile with new XP
+      const { error } = await supabase
+        .from('profiles')
+        .upsert(
+          { user_id: userId, tetris_xp: newTotalXP },
+          { onConflict: 'user_id' }
+        );
+      
+      if (error) throw error;
+      
+      setTotalXP(newTotalXP);
+      console.log('XP added successfully:', { added: xpToAdd, total: newTotalXP });
+    } catch (err) {
+      console.error('Failed to add XP:', err);
+    }
+  };
+
+  // Save game state to localStorage
+  const saveGameState = (state: GameState) => {
+    if (!userId) return;
+    localStorage.setItem(`game_state_${userId}`, JSON.stringify(state));
+    setSavedGameState(state);
+  };
+
+  // Load game state from localStorage
+  const loadGameState = (): GameState | null => {
+    if (!userId) return null;
+    const saved = localStorage.getItem(`game_state_${userId}`);
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  };
+
+  // Clear saved game state
+  const clearGameState = () => {
+    if (!userId) return;
+    localStorage.removeItem(`game_state_${userId}`);
+    setSavedGameState(null);
+  };
+
+  // Check for saved game on mount
+  useEffect(() => {
+    if (userId) {
+      const saved = loadGameState();
+      setSavedGameState(saved);
+      fetchTotalXP();
+    }
+  }, [userId]);
 
   const fetchWords = async () => {
     try {
@@ -165,9 +264,15 @@ export function useLearnedWords() {
     loading, 
     error,
     userId,
+    totalXP,
+    savedGameState,
     refetch: fetchWords,
     incrementStar,
-    resetStarToOne
+    resetStarToOne,
+    addTetrisXP,
+    saveGameState,
+    loadGameState,
+    clearGameState
   };
 }
 

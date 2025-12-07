@@ -14,6 +14,7 @@ interface GameBoardProps {
   combo: number;
   isHardMode: boolean;
   onToggleHardMode: () => void;
+  totalXP?: number;
 }
 
 const GRID_HEIGHT = 10;
@@ -21,7 +22,7 @@ const MAX_WRONG_WORDS = 9; // Game over when 9 words are wrong
 const TIME_PER_LETTER_NORMAL = 2000; // 2 seconds per letter in normal mode
 const TIME_PER_LETTER_HARD = 4000; // 4 seconds per letter in hard mode
 
-export const GameBoard = ({ currentWord, currentWordTurkish, onWordCorrect, onWordWrong, onGameOver, score, combo, isHardMode, onToggleHardMode }: GameBoardProps) => {
+export const GameBoard = ({ currentWord, currentWordTurkish, onWordCorrect, onWordWrong, onGameOver, score, combo, isHardMode, onToggleHardMode, totalXP = 0 }: GameBoardProps) => {
   const [answerBlocks, setAnswerBlocks] = useState<string[]>([]);
   const [scrambledLetters, setScrambledLetters] = useState<string[]>([]);
   const [fallingPosition, setFallingPosition] = useState(0);
@@ -136,13 +137,19 @@ export const GameBoard = ({ currentWord, currentWordTurkish, onWordCorrect, onWo
 
   return (
     <div className="flex flex-col h-full justify-between p-4 gap-4">
-      {/* Score, Combo and Hard Mode */}
+      {/* Score, Combo, Total XP and Hard Mode */}
       <div className="flex justify-center items-center gap-4">
         <div className="text-center">
           <div className="text-primary text-3xl font-bold animate-glow">
             {score}
           </div>
           <div className="text-muted-foreground text-xs">XP</div>
+        </div>
+        <div className="text-center">
+          <div className="text-muted-foreground text-xl font-bold">
+            {totalXP + score}
+          </div>
+          <div className="text-muted-foreground text-xs">TOTAL</div>
         </div>
         <div className="text-center">
           <div className={`text-2xl font-bold ${combo > 1 ? 'text-yellow-500 animate-pulse' : 'text-muted-foreground'}`}>
