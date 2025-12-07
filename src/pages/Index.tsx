@@ -1,10 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { GameBoard } from "@/components/GameBoard";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { useLearnedWords, shuffleArray, type LearnedWord } from "@/hooks/useLearnedWords";
-import { Star } from "lucide-react";
+import { useLearnedWords, shuffleArray, type LearnedWord, type GameState } from "@/hooks/useLearnedWords";
+import { Star, Trophy } from "lucide-react";
 
 const Index = () => {
   const [gameState, setGameState] = useState<"menu" | "playing" | "gameover">("menu");
@@ -13,26 +13,76 @@ const Index = () => {
   const [score, setScore] = useState(0);
   const [combo, setCombo] = useState(1);
   const [isHardMode, setIsHardMode] = useState(false);
+  const [stackedWords, setStackedWords] = useState<string[]>([]);
+  const hasAddedXP = useRef(false);
   
-  const { words, allWords, packages, selectedPackage, setSelectedPackage, loading, error, incrementStar, resetStarToOne } = useLearnedWords();
+  const { 
+    words, 
+    allWords, 
+    packages, 
+    selectedPackage, 
+    setSelectedPackage, 
+    loading, 
+    error, 
+    incrementStar, 
+    resetStarToOne,
+    totalXP,
+    savedGameState,
+    addTetrisXP,
+    saveGameState,
+    clearGameState
+  } = useLearnedWords();
 
-  // Clear localStorage on mount
+  // Save game state periodically
   useEffect(() => {
-    localStorage.clear();
-  }, []);
+    if (gameState === "playing" && gameWords.length > 0) {
+      const state: GameState = {
+        gameWords,
+        currentWordIndex,
+        score,
+        combo,
+        isHardMode,
+        stackedWords
+      };
+      saveGameState(state);
+    }
+  }, [currentWordIndex, score, combo, stackedWords, gameState]);
 
-  const startGame = () => {
-    if (words.length === 0) return;
-    setGameState("playing");
-    setScore(0);
-    setCombo(1);
-    setCurrentWordIndex(0);
-    setGameWords(shuffleArray(words));
+  // Add XP when game ends
+  useEffect(() => {
+    if (gameState === "gameover" && score > 0 && !hasAddedXP.current) {
+      hasAddedXP.current = true;
+      addTetrisXP(score);
+      clearGameState();
+    }
+  }, [gameState, score]);
+
+  const startGame = (continueGame: boolean = false) => {
+    hasAddedXP.current = false;
+    
+    if (continueGame && savedGameState) {
+      // Continue from saved state
+      setGameWords(savedGameState.gameWords);
+      setCurrentWordIndex(savedGameState.currentWordIndex);
+      setScore(savedGameState.score);
+      setCombo(savedGameState.combo);
+      setIsHardMode(savedGameState.isHardMode);
+      setStackedWords(savedGameState.stackedWords);
+      setGameState("playing");
+    } else {
+      // Start new game
+      if (words.length === 0) return;
+      clearGameState();
+      setGameState("playing");
+      setScore(0);
+      setCombo(1);
+      setCurrentWordIndex(0);
+      setStackedWords([]);
+      setGameWords(shuffleArray(words));
+    }
   };
 
   const calculateXP = (currentCombo: number) => {
-    // Normal: 100 + (combo-1)*5, max 150
-    // Hard: 200 + (combo-1)*10, max 300
     if (isHardMode) {
       return 200 + Math.min((currentCombo - 1) * 10, 100);
     }
@@ -45,7 +95,6 @@ const Index = () => {
     setScore(prev => prev + earnedXP);
     setCombo(prev => prev + 1);
     
-    // Increment star rating (max 5)
     if (currentWord) {
       await incrementStar(currentWord.id, currentWord.star_rating || 0);
     }
@@ -55,12 +104,11 @@ const Index = () => {
 
   const handleWordWrong = async () => {
     const currentWord = gameWords[currentWordIndex];
-    // 0 XP for wrong words, reset combo
     setCombo(1);
     
-    // Reset star rating to 1
     if (currentWord) {
       await resetStarToOne(currentWord.id);
+      setStackedWords(prev => [...prev, currentWord.english]);
     }
     
     moveToNextWord();
@@ -78,7 +126,6 @@ const Index = () => {
     setGameState("gameover");
   };
 
-  // Group words by star rating
   const getWordsByStars = (starCount: number) => {
     const wordsToShow = selectedPackage 
       ? allWords.filter(w => w.package_name === selectedPackage)
@@ -136,6 +183,14 @@ const Index = () => {
           <p className="text-xl text-muted-foreground max-w-md">
             Catch falling words and build them before they hit the bottom!
           </p>
+          
+          {/* Total XP Display */}
+          <div className="flex items-center justify-center gap-2 bg-primary/10 px-6 py-3 rounded-full">
+            <Trophy className="w-6 h-6 text-primary" />
+            <span className="text-2xl font-bold text-primary">{totalXP}</span>
+            <span className="text-muted-foreground">Total XP</span>
+          </div>
+          
           <p className="text-sm text-muted-foreground">
             {words.length} kelime yüklendi
           </p>
@@ -201,12 +256,23 @@ const Index = () => {
             </DialogContent>
           </Dialog>
 
+          {/* Continue Game Button - show only if saved game exists */}
+          {savedGameState && (
+            <Button 
+              onClick={() => startGame(true)}
+              variant="outline"
+              className="w-full text-lg py-6 border-primary text-primary hover:bg-primary/10"
+            >
+              DEVAM ET (XP: {savedGameState.score})
+            </Button>
+          )}
+
           <Button 
-            onClick={startGame}
+            onClick={() => startGame(false)}
             disabled={words.length === 0}
             className="bg-primary hover:bg-primary/90 text-primary-foreground text-2xl px-12 py-8 rounded-2xl shadow-lg hover:shadow-[0_0_30px_hsl(var(--primary)/0.5)] transition-all animate-pop-in w-full"
           >
-            START GAME
+            {savedGameState ? 'YENİ OYUN' : 'START GAME'}
           </Button>
           
           <div className="text-center text-sm text-muted-foreground space-y-2 max-w-sm mt-8">
@@ -229,16 +295,23 @@ const Index = () => {
           <h1 className="text-5xl font-bold text-destructive">
             GAME OVER
           </h1>
-          <div className="text-center">
-            <div className="text-6xl font-bold text-primary animate-glow mb-2">
-              {score}
+          <div className="text-center space-y-4">
+            <div>
+              <div className="text-6xl font-bold text-primary animate-glow mb-2">
+                {score}
+              </div>
+              <div className="text-xl text-muted-foreground">BU OYUN XP</div>
             </div>
-            <div className="text-xl text-muted-foreground">FINAL SCORE</div>
+            <div className="flex items-center justify-center gap-2 bg-primary/10 px-6 py-3 rounded-full">
+              <Trophy className="w-6 h-6 text-primary" />
+              <span className="text-2xl font-bold text-primary">{totalXP + score}</span>
+              <span className="text-muted-foreground">TOTAL XP</span>
+            </div>
           </div>
         </div>
         
         <Button 
-          onClick={startGame}
+          onClick={() => startGame(false)}
           className="bg-primary hover:bg-primary/90 text-primary-foreground text-2xl px-12 py-8 rounded-2xl shadow-lg hover:shadow-[0_0_30px_hsl(var(--primary)/0.5)] transition-all"
         >
           PLAY AGAIN
@@ -268,6 +341,7 @@ const Index = () => {
           combo={combo}
           isHardMode={isHardMode}
           onToggleHardMode={() => setIsHardMode(!isHardMode)}
+          totalXP={totalXP}
         />
       </div>
     </div>
