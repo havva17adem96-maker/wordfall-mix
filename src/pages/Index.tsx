@@ -4,10 +4,10 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useLearnedWords, shuffleArray, type LearnedWord, type GameState } from "@/hooks/useLearnedWords";
 import { PackageSelector } from "@/components/PackageSelector";
-import { Star, Trophy } from "lucide-react";
+import { Star, Trophy, BookOpen } from "lucide-react";
 
 const Index = () => {
-  const [gameState, setGameState] = useState<"menu" | "playing" | "gameover">("menu");
+  const [gameState, setGameState] = useState<"loading" | "playing" | "gameover">("loading");
   const [gameWords, setGameWords] = useState<LearnedWord[]>([]);
   const [currentWordIndex, setCurrentWordIndex] = useState(0);
   const [score, setScore] = useState(0);
@@ -15,6 +15,7 @@ const Index = () => {
   const [isHardMode, setIsHardMode] = useState(false);
   const [stackedWords, setStackedWords] = useState<string[]>([]);
   const hasAddedXP = useRef(false);
+  const hasAutoStarted = useRef(false);
   
   const { 
     words, 
@@ -32,6 +33,14 @@ const Index = () => {
     saveGameState,
     clearGameState
   } = useLearnedWords();
+
+  // Auto-start game when words are loaded
+  useEffect(() => {
+    if (!loading && words.length > 0 && !hasAutoStarted.current) {
+      hasAutoStarted.current = true;
+      startGame();
+    }
+  }, [loading, words.length, savedGameState]);
 
   // Save game state periodically
   useEffect(() => {
@@ -57,11 +66,11 @@ const Index = () => {
     }
   }, [gameState, score]);
 
-  const startGame = (continueGame: boolean = false) => {
+  const startGame = () => {
     hasAddedXP.current = false;
     
-    if (continueGame && savedGameState) {
-      // Continue from saved state
+    // Always try to continue from saved state first
+    if (savedGameState) {
       setGameWords(savedGameState.gameWords);
       setCurrentWordIndex(savedGameState.currentWordIndex);
       setScore(savedGameState.score);
@@ -72,7 +81,6 @@ const Index = () => {
     } else {
       // Start new game
       if (words.length === 0) return;
-      clearGameState();
       setGameState("playing");
       setScore(0);
       setCombo(1);
@@ -80,6 +88,18 @@ const Index = () => {
       setStackedWords([]);
       setGameWords(shuffleArray(words));
     }
+  };
+
+  const startNewGame = () => {
+    hasAddedXP.current = false;
+    clearGameState();
+    if (words.length === 0) return;
+    setGameState("playing");
+    setScore(0);
+    setCombo(1);
+    setCurrentWordIndex(0);
+    setStackedWords([]);
+    setGameWords(shuffleArray(words));
   };
 
   const calculateXP = (currentCombo: number) => {
@@ -127,7 +147,11 @@ const Index = () => {
   };
 
   const getWordsByStars = (starCount: number) => {
-    return allWords.filter(w => (w.star_rating || 0) === starCount);
+    // Filter by selected package for the dialog
+    const packageWords = selectedPackage === "all" 
+      ? allWords 
+      : allWords.filter(w => w.package_id === selectedPackage);
+    return packageWords.filter(w => (w.star_rating || 0) === starCount);
   };
 
   const renderStars = (count: number) => {
@@ -139,7 +163,7 @@ const Index = () => {
     ));
   };
 
-  if (loading) {
+  if (loading || gameState === "loading") {
     return (
       <div className="min-h-screen bg-gradient-to-b from-background to-background/80 flex items-center justify-center">
         <div className="text-2xl text-muted-foreground animate-pulse">Kelimeler yükleniyor...</div>
@@ -170,50 +194,83 @@ const Index = () => {
     );
   }
 
-  if (gameState === "menu") {
+  if (gameState === "gameover") {
     return (
       <div className="min-h-screen bg-gradient-to-b from-background to-background/80 flex flex-col items-center justify-center p-8 gap-8">
         <div className="text-center space-y-4">
-          <h1 className="text-6xl font-bold text-primary animate-glow">
-            DROP GAME
+          <h1 className="text-5xl font-bold text-destructive">
+            GAME OVER
           </h1>
-          <p className="text-xl text-muted-foreground max-w-md">
-            Catch falling words and build them before they hit the bottom!
-          </p>
-          
-          {/* Total XP Display */}
-          <div className="flex items-center justify-center gap-2 bg-primary/10 px-6 py-3 rounded-full">
-            <Trophy className="w-6 h-6 text-primary" />
-            <span className="text-2xl font-bold text-primary">{totalXP}</span>
-            <span className="text-muted-foreground">Total XP</span>
+          <div className="text-center space-y-4">
+            <div>
+              <div className="text-6xl font-bold text-primary animate-glow mb-2">
+                {score}
+              </div>
+              <div className="text-xl text-muted-foreground">BU OYUN XP</div>
+            </div>
+            <div className="flex items-center justify-center gap-2 bg-primary/10 px-6 py-3 rounded-full">
+              <Trophy className="w-6 h-6 text-primary" />
+              <span className="text-2xl font-bold text-primary">{totalXP + score}</span>
+              <span className="text-muted-foreground">TOTAL XP</span>
+            </div>
           </div>
-          
-          <p className="text-sm text-muted-foreground">
-            {words.length} kelime mevcut
-          </p>
         </div>
         
-        <div className="flex flex-col gap-4 items-center w-full max-w-md">
-          {/* Package Selector - using new component */}
-          <div className="w-full space-y-2">
-            <label className="text-sm text-muted-foreground block text-center">Paket Seç:</label>
+        <Button 
+          onClick={startNewGame}
+          className="bg-primary hover:bg-primary/90 text-primary-foreground text-2xl px-12 py-8 rounded-2xl shadow-lg hover:shadow-[0_0_30px_hsl(var(--primary)/0.5)] transition-all"
+        >
+          TEKRAR OYNA
+        </Button>
+      </div>
+    );
+  }
+
+  if (gameWords.length === 0 || !gameWords[currentWordIndex]) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-background to-background/80 flex items-center justify-center">
+        <div className="text-2xl text-muted-foreground animate-pulse">Loading...</div>
+      </div>
+    );
+  }
+
+  // Get current package words for the dialog
+  const currentPackageWords = selectedPackage === "all" 
+    ? allWords 
+    : allWords.filter(w => w.package_id === selectedPackage);
+
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-background to-background/80">
+      <div className="container max-w-2xl mx-auto h-screen flex flex-col">
+        {/* Top Bar with Package Selector, Total XP, and All Words Button */}
+        <div className="flex items-center justify-between p-2 gap-2">
+          {/* Left: Package Selector */}
+          <div className="flex-1">
             <PackageSelector
               unlockedPackages={unlockedPackages}
               selectedPackage={selectedPackage}
               onSelect={setSelectedPackage}
             />
           </div>
-
-          {/* All Words Button */}
+          
+          {/* Center: Total XP */}
+          <div className="flex items-center gap-1 bg-primary/10 px-3 py-1 rounded-full">
+            <Trophy className="w-4 h-4 text-primary" />
+            <span className="font-bold text-primary">{totalXP + score}</span>
+          </div>
+          
+          {/* Right: All Words Button */}
           <Dialog>
             <DialogTrigger asChild>
-              <Button variant="outline" className="w-full max-w-xs">
-                Tüm Kelimeler ({words.length})
+              <Button variant="outline" size="sm" className="gap-1">
+                <BookOpen className="w-4 h-4" />
+                <span className="hidden sm:inline">Tüm Kelimeler</span>
+                <span className="sm:hidden">{currentPackageWords.length}</span>
               </Button>
             </DialogTrigger>
             <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
               <DialogHeader>
-                <DialogTitle>Tüm Kelimeler</DialogTitle>
+                <DialogTitle>Tüm Kelimeler ({currentPackageWords.length})</DialogTitle>
               </DialogHeader>
               <div className="space-y-6">
                 {[5, 4, 3, 2, 1, 0].map(starCount => {
@@ -239,94 +296,23 @@ const Index = () => {
               </div>
             </DialogContent>
           </Dialog>
-
-          {/* Continue Game Button - show only if saved game exists */}
-          {savedGameState && (
-            <Button 
-              onClick={() => startGame(true)}
-              variant="outline"
-              className="w-full max-w-xs text-lg py-6 border-primary text-primary hover:bg-primary/10"
-            >
-              DEVAM ET (XP: {savedGameState.score})
-            </Button>
-          )}
-
-          <Button 
-            onClick={() => startGame(false)}
-            disabled={words.length === 0}
-            className="bg-primary hover:bg-primary/90 text-primary-foreground text-2xl px-12 py-8 rounded-2xl shadow-lg hover:shadow-[0_0_30px_hsl(var(--primary)/0.5)] transition-all animate-pop-in w-full max-w-xs"
-          >
-            {savedGameState ? 'YENİ OYUN' : 'START GAME'}
-          </Button>
-          
-          <div className="text-center text-sm text-muted-foreground space-y-2 max-w-sm mt-8">
-            <p className="font-semibold text-foreground">HOW TO PLAY:</p>
-            <p>• Words fall from the top</p>
-            <p>• Tap letters at the bottom to build the word</p>
-            <p>• Tap answer blocks to remove letters</p>
-            <p>• Complete words before they reach the bottom!</p>
-            <p>• Game over after 9 wrong words</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (gameState === "gameover") {
-    return (
-      <div className="min-h-screen bg-gradient-to-b from-background to-background/80 flex flex-col items-center justify-center p-8 gap-8">
-        <div className="text-center space-y-4">
-          <h1 className="text-5xl font-bold text-destructive">
-            GAME OVER
-          </h1>
-          <div className="text-center space-y-4">
-            <div>
-              <div className="text-6xl font-bold text-primary animate-glow mb-2">
-                {score}
-              </div>
-              <div className="text-xl text-muted-foreground">BU OYUN XP</div>
-            </div>
-            <div className="flex items-center justify-center gap-2 bg-primary/10 px-6 py-3 rounded-full">
-              <Trophy className="w-6 h-6 text-primary" />
-              <span className="text-2xl font-bold text-primary">{totalXP + score}</span>
-              <span className="text-muted-foreground">TOTAL XP</span>
-            </div>
-          </div>
         </div>
         
-        <Button 
-          onClick={() => startGame(false)}
-          className="bg-primary hover:bg-primary/90 text-primary-foreground text-2xl px-12 py-8 rounded-2xl shadow-lg hover:shadow-[0_0_30px_hsl(var(--primary)/0.5)] transition-all"
-        >
-          PLAY AGAIN
-        </Button>
-      </div>
-    );
-  }
-
-  if (gameWords.length === 0 || !gameWords[currentWordIndex]) {
-    return (
-      <div className="min-h-screen bg-gradient-to-b from-background to-background/80 flex items-center justify-center">
-        <div className="text-2xl text-muted-foreground animate-pulse">Loading...</div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="min-h-screen bg-gradient-to-b from-background to-background/80">
-      <div className="container max-w-2xl mx-auto h-screen">
-        <GameBoard 
-          currentWord={gameWords[currentWordIndex].english.toLowerCase()}
-          currentWordTurkish={gameWords[currentWordIndex].turkish}
-          onWordCorrect={handleWordCorrect}
-          onWordWrong={handleWordWrong}
-          onGameOver={handleGameOver}
-          score={score}
-          combo={combo}
-          isHardMode={isHardMode}
-          onToggleHardMode={() => setIsHardMode(!isHardMode)}
-          totalXP={totalXP}
-        />
+        {/* Game Board */}
+        <div className="flex-1">
+          <GameBoard 
+            currentWord={gameWords[currentWordIndex].english.toLowerCase()}
+            currentWordTurkish={gameWords[currentWordIndex].turkish}
+            onWordCorrect={handleWordCorrect}
+            onWordWrong={handleWordWrong}
+            onGameOver={handleGameOver}
+            score={score}
+            combo={combo}
+            isHardMode={isHardMode}
+            onToggleHardMode={() => setIsHardMode(!isHardMode)}
+            totalXP={totalXP}
+          />
+        </div>
       </div>
     </div>
   );
