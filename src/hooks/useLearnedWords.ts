@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { useUnlockedWords, UnlockedWord, UnlockedPackage } from './useUnlockedWords';
 
 export interface LearnedWord {
   id: string;
   english: string;
   turkish: string;
   package_name?: string;
+  package_id?: string;
   star_rating?: number;
 }
 
@@ -24,22 +26,85 @@ export interface GameState {
 }
 
 export function useLearnedWords() {
-  const [words, setWords] = useState<LearnedWord[]>([]);
-  const [packages, setPackages] = useState<string[]>([]);
-  const [selectedPackage, setSelectedPackage] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [selectedPackage, setSelectedPackage] = useState<string>("all");
   const [userId, setUserId] = useState<string | null>(null);
   const [totalXP, setTotalXP] = useState(0);
   const [savedGameState, setSavedGameState] = useState<GameState | null>(null);
+  const [wordsWithRatings, setWordsWithRatings] = useState<LearnedWord[]>([]);
 
-  // Get user_id from URL on mount
+  // Get user_id and package_id from URL on mount
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const uid = urlParams.get('user_id');
-    console.log('URL user_id:', uid);
+    const pkgId = urlParams.get('package_id');
+    console.log('URL user_id:', uid, 'package_id:', pkgId);
     setUserId(uid);
+    if (pkgId) {
+      setSelectedPackage(pkgId);
+    }
   }, []);
+
+  // Use the unlocked words hook
+  const { 
+    words: unlockedWords, 
+    packages: unlockedPackages, 
+    loading, 
+    error, 
+    refetch: refetchUnlockedWords 
+  } = useUnlockedWords(userId);
+
+  // Fetch user-specific star ratings and merge with words
+  const fetchRatingsAndMerge = async () => {
+    if (!userId || unlockedWords.length === 0) {
+      setWordsWithRatings(unlockedWords.map(w => ({
+        id: w.id,
+        english: w.english,
+        turkish: w.turkish,
+        package_name: w.package_name,
+        package_id: w.package_id,
+        star_rating: 0
+      })));
+      return;
+    }
+
+    try {
+      const { data: ratingsData, error: ratingsError } = await supabase
+        .from('user_word_progress')
+        .select('word_id, star_rating')
+        .eq('user_id', userId);
+
+      if (ratingsError) throw ratingsError;
+
+      const ratingsMap = new Map<string, number>(
+        (ratingsData || []).map((r: UserWordRating) => [r.word_id, r.star_rating])
+      );
+
+      const merged = unlockedWords.map(w => ({
+        id: w.id,
+        english: w.english,
+        turkish: w.turkish,
+        package_name: w.package_name,
+        package_id: w.package_id,
+        star_rating: ratingsMap.get(w.id) || 0
+      }));
+
+      setWordsWithRatings(merged);
+    } catch (err) {
+      console.error('Failed to fetch ratings:', err);
+      setWordsWithRatings(unlockedWords.map(w => ({
+        id: w.id,
+        english: w.english,
+        turkish: w.turkish,
+        package_name: w.package_name,
+        package_id: w.package_id,
+        star_rating: 0
+      })));
+    }
+  };
+
+  useEffect(() => {
+    fetchRatingsAndMerge();
+  }, [unlockedWords, userId]);
 
   // Fetch total XP from profiles table
   const fetchTotalXP = async () => {
@@ -65,7 +130,6 @@ export function useLearnedWords() {
     if (!userId || xpToAdd <= 0) return;
     
     try {
-      // Get current XP
       const { data: profile } = await supabase
         .from('profiles')
         .select('tetris_xp')
@@ -75,7 +139,6 @@ export function useLearnedWords() {
       const currentXP = profile?.tetris_xp || 0;
       const newTotalXP = currentXP + xpToAdd;
       
-      // Upsert profile with new XP
       const { error } = await supabase
         .from('profiles')
         .upsert(
@@ -129,53 +192,6 @@ export function useLearnedWords() {
     }
   }, [userId]);
 
-  const fetchWords = async () => {
-    try {
-      setLoading(true);
-      
-      // Fetch all words
-      const { data: wordsData, error: wordsError } = await supabase
-        .from('learned_words')
-        .select('id, english, turkish, package_name');
-
-      if (wordsError) throw wordsError;
-
-      let allWords = (wordsData || []).map(w => ({ ...w, star_rating: 0 }));
-
-      // If user_id exists, fetch their ratings from user_word_ratings
-      if (userId) {
-        const { data: ratingsData, error: ratingsError } = await supabase
-          .from('user_word_progress')
-          .select('word_id, star_rating')
-          .eq('user_id', userId);
-
-        if (!ratingsError && ratingsData) {
-          const ratingsMap = new Map<string, number>(
-            ratingsData.map((r: UserWordRating) => [r.word_id, r.star_rating])
-          );
-          
-          // Merge ratings with words
-          allWords = allWords.map(w => ({
-            ...w,
-            star_rating: ratingsMap.get(w.id) || 0
-          }));
-        }
-      }
-
-      setWords(allWords);
-
-      // Extract unique package names
-      const uniquePackages = [...new Set(allWords.map(w => w.package_name).filter(Boolean))] as string[];
-      setPackages(uniquePackages);
-      setError(null);
-    } catch (err) {
-      console.error('Fetch error:', err);
-      setError(err instanceof Error ? err.message : 'Failed to fetch words');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   // Update star rating for a word (user-specific)
   const updateStarRating = async (wordId: string, newRating: number) => {
     console.log('updateStarRating called:', { wordId, newRating, userId });
@@ -186,10 +202,8 @@ export function useLearnedWords() {
     }
 
     const clampedRating = Math.min(Math.max(newRating, 0), 5);
-    console.log('Attempting to save star rating:', { userId, wordId, clampedRating });
 
     try {
-      // Upsert into user_word_progress
       const { data, error } = await supabase
         .from('user_word_progress')
         .upsert(
@@ -198,12 +212,9 @@ export function useLearnedWords() {
         )
         .select();
 
-      console.log('Supabase upsert response:', { data, error });
-
       if (error) throw error;
       
-      // Update local state
-      setWords(prev => prev.map(w => 
+      setWordsWithRatings(prev => prev.map(w => 
         w.id === wordId ? { ...w, star_rating: clampedRating } : w
       ));
       console.log('Star rating updated successfully');
@@ -222,51 +233,33 @@ export function useLearnedWords() {
     await updateStarRating(wordId, 1);
   };
 
+  // Handle package selection and refetch
+  const handlePackageSelect = (packageId: string) => {
+    setSelectedPackage(packageId);
+    refetchUnlockedWords(packageId === "all" ? undefined : packageId);
+  };
+
   // Get filtered words based on selected package
-  const filteredWords = selectedPackage 
-    ? words.filter(w => w.package_name === selectedPackage)
-    : words;
+  const filteredWords = selectedPackage === "all" 
+    ? wordsWithRatings
+    : wordsWithRatings.filter(w => w.package_id === selectedPackage);
 
-  useEffect(() => {
-    if (userId !== null || !window.location.search.includes('user_id')) {
-      fetchWords();
-    }
-  }, [userId]);
-
-  // Real-time subscription
-  useEffect(() => {
-    const channel = supabase
-      .channel('learned_words_changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'learned_words'
-        },
-        () => {
-          fetchWords();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [userId]);
+  // Extract unique package names for display
+  const packageNames = [...new Set(wordsWithRatings.map(w => w.package_name).filter(Boolean))] as string[];
 
   return { 
     words: filteredWords, 
-    allWords: words,
-    packages, 
+    allWords: wordsWithRatings,
+    packages: packageNames,
+    unlockedPackages,
     selectedPackage, 
-    setSelectedPackage,
+    setSelectedPackage: handlePackageSelect,
     loading, 
     error,
     userId,
     totalXP,
     savedGameState,
-    refetch: fetchWords,
+    refetch: () => refetchUnlockedWords(selectedPackage === "all" ? undefined : selectedPackage),
     incrementStar,
     resetStarToOne,
     addTetrisXP,

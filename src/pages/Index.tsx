@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from "react";
 import { GameBoard } from "@/components/GameBoard";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useLearnedWords, shuffleArray, type LearnedWord, type GameState } from "@/hooks/useLearnedWords";
+import { PackageSelector } from "@/components/PackageSelector";
 import { Star, Trophy } from "lucide-react";
 
 const Index = () => {
@@ -19,7 +19,7 @@ const Index = () => {
   const { 
     words, 
     allWords, 
-    packages, 
+    unlockedPackages, 
     selectedPackage, 
     setSelectedPackage, 
     loading, 
@@ -127,10 +127,7 @@ const Index = () => {
   };
 
   const getWordsByStars = (starCount: number) => {
-    const wordsToShow = selectedPackage 
-      ? allWords.filter(w => w.package_name === selectedPackage)
-      : allWords;
-    return wordsToShow.filter(w => (w.star_rating || 0) === starCount);
+    return allWords.filter(w => (w.star_rating || 0) === starCount);
   };
 
   const renderStars = (count: number) => {
@@ -155,7 +152,7 @@ const Index = () => {
       <div className="min-h-screen bg-gradient-to-b from-background to-background/80 flex items-center justify-center p-8">
         <div className="text-center space-y-4">
           <div className="text-2xl text-destructive">Hata: {error}</div>
-          <p className="text-muted-foreground">Supabase bağlantısını kontrol edin.</p>
+          <p className="text-muted-foreground">Bağlantıyı kontrol edin.</p>
           <p className="text-xs text-muted-foreground">URL: {window.location.href}</p>
         </div>
       </div>
@@ -166,8 +163,8 @@ const Index = () => {
     return (
       <div className="min-h-screen bg-gradient-to-b from-background to-background/80 flex items-center justify-center p-8">
         <div className="text-center space-y-4">
-          <div className="text-2xl text-muted-foreground">Henüz öğrenilmiş kelime yok</div>
-          <p className="text-muted-foreground">Diğer projede kelime ekleyin.</p>
+          <div className="text-2xl text-muted-foreground">Henüz kilitsiz kelime yok</div>
+          <p className="text-muted-foreground">Diğer projede kelime kilidini açın.</p>
         </div>
       </div>
     );
@@ -192,44 +189,31 @@ const Index = () => {
           </div>
           
           <p className="text-sm text-muted-foreground">
-            {words.length} kelime yüklendi
+            {words.length} kelime mevcut
           </p>
         </div>
         
-        <div className="flex flex-col gap-4 items-center w-full max-w-xs">
-          {/* Package Selector */}
+        <div className="flex flex-col gap-4 items-center w-full max-w-md">
+          {/* Package Selector - using new component */}
           <div className="w-full space-y-2">
-            <label className="text-sm text-muted-foreground">Paket Seç:</label>
-            <Select 
-              value={selectedPackage || "all"} 
-              onValueChange={(value) => setSelectedPackage(value === "all" ? null : value)}
-            >
-              <SelectTrigger className="w-full bg-background border-border">
-                <SelectValue placeholder="Tüm Kelimeler" />
-              </SelectTrigger>
-              <SelectContent className="bg-background border-border">
-                <SelectItem value="all">Tüm Kelimeler ({allWords.length})</SelectItem>
-                {packages.map((pkg) => (
-                  <SelectItem key={pkg} value={pkg}>
-                    {pkg} ({allWords.filter(w => w.package_name === pkg).length})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <label className="text-sm text-muted-foreground block text-center">Paket Seç:</label>
+            <PackageSelector
+              unlockedPackages={unlockedPackages}
+              selectedPackage={selectedPackage}
+              onSelect={setSelectedPackage}
+            />
           </div>
 
           {/* All Words Button */}
           <Dialog>
             <DialogTrigger asChild>
-              <Button variant="outline" className="w-full">
+              <Button variant="outline" className="w-full max-w-xs">
                 Tüm Kelimeler ({words.length})
               </Button>
             </DialogTrigger>
             <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
               <DialogHeader>
-                <DialogTitle>
-                  {selectedPackage ? `${selectedPackage} Kelimeleri` : 'Tüm Kelimeler'}
-                </DialogTitle>
+                <DialogTitle>Tüm Kelimeler</DialogTitle>
               </DialogHeader>
               <div className="space-y-6">
                 {[5, 4, 3, 2, 1, 0].map(starCount => {
@@ -261,7 +245,7 @@ const Index = () => {
             <Button 
               onClick={() => startGame(true)}
               variant="outline"
-              className="w-full text-lg py-6 border-primary text-primary hover:bg-primary/10"
+              className="w-full max-w-xs text-lg py-6 border-primary text-primary hover:bg-primary/10"
             >
               DEVAM ET (XP: {savedGameState.score})
             </Button>
@@ -270,7 +254,7 @@ const Index = () => {
           <Button 
             onClick={() => startGame(false)}
             disabled={words.length === 0}
-            className="bg-primary hover:bg-primary/90 text-primary-foreground text-2xl px-12 py-8 rounded-2xl shadow-lg hover:shadow-[0_0_30px_hsl(var(--primary)/0.5)] transition-all animate-pop-in w-full"
+            className="bg-primary hover:bg-primary/90 text-primary-foreground text-2xl px-12 py-8 rounded-2xl shadow-lg hover:shadow-[0_0_30px_hsl(var(--primary)/0.5)] transition-all animate-pop-in w-full max-w-xs"
           >
             {savedGameState ? 'YENİ OYUN' : 'START GAME'}
           </Button>
